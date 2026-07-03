@@ -53,8 +53,8 @@ Pour faire progresser l'IA de manière autonome :
 # Mode interactif multi-agents (7 IA simultanées + 1 graphe + 1 Slider de vitesse)
 python train_multi_dqn.py
 
-# Mode headless (vitesse calcul maximale pour laisser tourner sur Orange Pi)
-python train_dqn.py --episodes 10000
+# Mode headless (sur Orange Pi, vitesse max débridée par défaut, ou limitée en steps/s)
+python train_dqn.py --max-steps-s 1000   # Exemple : limite à 1000 calculs par seconde
 ```
 
 ### 4. Étape C : Démo visuelle

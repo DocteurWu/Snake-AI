@@ -13,6 +13,7 @@ import os
 import sys
 import time
 import signal
+import argparse
 import torch
 import numpy as np
 
@@ -39,8 +40,18 @@ signal.signal(signal.SIGTERM, signal_handler)
 def main():
     global agent, interrompu
     
+    parser = argparse.ArgumentParser(description="Entraînement DQN Headless")
+    parser.add_argument("--max-steps-s", type=int, default=0, 
+                        help="Nombre maximum de steps de simulation par seconde (0 = débridé/vitesse maximale)")
+    args = parser.parse_args()
+    
     print("=" * 60)
     print(" SNAKE IA — Entraînement Headless DQN Haute Performance")
+    print("=" * 60)
+    if args.max_steps_s > 0:
+        print(f"[*] Limite de vitesse configurée : {args.max_steps_s} steps/s")
+    else:
+        print("[*] Limite de vitesse : Vitesse MAX débridée")
     print("=" * 60)
     
     agent = AgentDQN()
@@ -57,7 +68,6 @@ def main():
         print("[*] Aucun modèle existant trouvé. Démarrage de zéro.")
         
     # Hyper-optimisation ARM : Nombre d'environnements parallèles en arrière-plan
-    # 32 environnements permettent de maximiser le débit d'inférence brute de PyTorch sur CPU
     NB_ENVS = 32
     print(f"[*] Initialisation de {NB_ENVS} environnements de simulation...")
     jeux = [SnakeGame(mode_graphique=False) for _ in range(NB_ENVS)]
@@ -77,6 +87,8 @@ def main():
     
     try:
         while not interrompu:
+            temps_debut_batch = time.time()
+            
             # 1. Choisir les actions en batch pour tous les environnements
             actions = agent.choisir_actions_batch(etats, entrainement=True)
             
@@ -108,6 +120,14 @@ def main():
                     # Sauvegarde périodique
                     if total_episodes % 100 == 0:
                         agent.sauvegarder()
+            
+            # Limiter la vitesse si demandé
+            if args.max_steps_s > 0:
+                duree_calculee = time.time() - temps_debut_batch
+                duree_cible = NB_ENVS / args.max_steps_s
+                temps_sommeil = duree_cible - duree_calculee
+                if temps_sommeil > 0:
+                    time.sleep(temps_sommeil)
                         
             # 5. Affichage régulier des statistiques (toutes les 3 secondes pour ne pas ralentir le CPU)
             temps_actuel = time.time()
