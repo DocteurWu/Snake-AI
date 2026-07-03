@@ -1,17 +1,15 @@
 # -*- coding: utf-8 -*-
 """
 =============================================================================
- SNAKE IA — Entraînement DQN Multi-Agent Parallèle (Optimisé Vitesse)
+ SNAKE IA — Entraînement DQN Multi-Agent Parallèle (Double Curseur)
 =============================================================================
  Fait tourner 7 serpents en parallèle.
- Si Vitesse = MAX : désactive le rendu du jeu pour un calcul CPU pur à 
- vitesse maximale (head-less dynamique), ce qui évite le blocage VSync.
- 
- Contrôles :
-   Clic souris : Ajuster la vitesse avec le Slider dans la 8ème case
-   ESPACE      : Mettre l'entraînement en pause / reprise
-   S           : Sauvegarder manuellement le modèle
-   ECHAP       : Sauvegarder et quitter
+ Possède deux sliders dans la case #8 :
+   1. Simulation (Steps/Frame) : Règle la vitesse de calcul en arrière-plan (1x à 100x ou Max).
+   2. Affichage (FPS) : Règle le rafraîchissement visuel à l'écran (5 à 120 FPS).
+   
+ Cela permet de simuler des milliers d'étapes par seconde en arrière-plan
+ tout en regardant les serpents bouger à une vitesse confortable de ton choix.
 =============================================================================
 """
 
@@ -22,15 +20,13 @@ import pygame
 import numpy as np
 
 from config import (
-    TAILLE_GRILLE, TAILLE_CASE, VITESSE_JEU,
-    NOIR, BLANC, ROUGE, VERT_FONCE, VERT_CLAIR, GRIS, BLEU,
-    DROITE, GAUCHE, HAUT, BAS, SENS_HORAIRE,
-    TAILLE_ETAT, NB_ACTIONS, NOM_MODELE_DQN
+    TAILLE_GRILLE, TAILLE_CASE, NOIR, BLANC, ROUGE, VERT_FONCE, VERT_CLAIR, GRIS, BLEU,
+    DROITE, GAUCHE, HAUT, BAS, SENS_HORAIRE, TAILLE_ETAT, NB_ACTIONS, NOM_MODELE_DQN
 )
 from game import SnakeGame
 from agent_dqn import AgentDQN
 
-# Dimensions de la fenêtre globale
+# Dimensions de la grille
 LARGEUR_SOUS_JEU = TAILLE_GRILLE * TAILLE_CASE # 400 px
 HAUTEUR_SOUS_JEU = TAILLE_GRILLE * TAILLE_CASE # 400 px
 NB_COLONNES = 4
@@ -78,11 +74,12 @@ class SubSnakeGame(SnakeGame):
 
 
 class Slider:
-    def __init__(self, x, y, largeur, hauteur, val_min, val_max, val_init):
+    def __init__(self, x, y, largeur, hauteur, val_min, val_max, val_init, titre="Vitesse"):
         self.rect = pygame.Rect(x, y, largeur, hauteur)
         self.min = val_min
         self.max = val_max
         self.valeur = val_init
+        self.titre = titre
         self.bouton_rect = pygame.Rect(x, y - 5, 10, hauteur + 10)
         self.update_bouton_pos()
         self.drag = False
@@ -93,7 +90,7 @@ class Slider:
         self.bouton_rect.x = self.rect.x + int(ratio * (self.rect.width - self.bouton_rect.width))
 
     def draw(self, surface):
-        police = pygame.font.SysFont('arial', 13)
+        police = pygame.font.SysFont('arial', 12)
         pygame.draw.rect(surface, GRIS, self.rect, border_radius=3)
         
         largeur_remplissage = self.bouton_rect.centerx - self.rect.x
@@ -104,9 +101,9 @@ class Slider:
         couleur_curseur = BLANC if not self.drag else VERT_CLAIR
         pygame.draw.rect(surface, couleur_curseur, self.bouton_rect, border_radius=2)
         
-        val_txt = "MAX (No limit - Headless)" if self.mode_max else f"{int(self.valeur)} FPS"
-        txt = police.render(f"Vitesse : {val_txt}", True, BLANC)
-        surface.blit(txt, (self.rect.x, self.rect.y - 20))
+        val_txt = "MAX (CPU illimité)" if (self.mode_max and self.max > 150) else f"{int(self.valeur)}"
+        txt = police.render(f"{self.titre} : {val_txt}", True, BLANC)
+        surface.blit(txt, (self.rect.x, self.rect.y - 18))
 
     def handle_event(self, event, offset_x, offset_y):
         if event.type == pygame.MOUSEBUTTONDOWN:
@@ -129,7 +126,7 @@ class Slider:
         ratio = (x_relatif - self.rect.x) / (self.rect.width - self.bouton_rect.width)
         self.valeur = self.min + ratio * (self.max - self.min)
         
-        if self.valeur >= self.max - 20:
+        if self.valeur >= self.max - (self.max * 0.05):
             self.mode_max = True
         else:
             self.mode_max = False
@@ -137,25 +134,29 @@ class Slider:
         self.update_bouton_pos()
 
 
-def dessiner_graphe(surface, scores, moyennes, slider):
+def dessiner_graphe(surface, scores, moyennes, slider_sim, slider_fps, fps_reel):
     surface.fill((20, 20, 20))
     pygame.draw.rect(surface, BLEU, (0, 0, LARGEUR_SOUS_JEU, HAUTEUR_SOUS_JEU), 2)
     
-    slider.draw(surface)
+    # Rendu des deux sliders
+    slider_sim.draw(surface)
+    slider_fps.draw(surface)
     
-    police = pygame.font.SysFont('arial', 13)
-    b_50 = police.render("[50 FPS]", True, VERT_CLAIR)
-    b_max = police.render("[Vitesse MAX]", True, ROUGE)
-    surface.blit(b_50, (30, 75))
-    surface.blit(b_max, (140, 75))
+    police = pygame.font.SysFont('arial', 12)
     
-    margin_x, margin_y = 50, 40
+    # Affichage des informations de vitesse réelle
+    fps_txt = police.render(f"Calculs réels : {fps_reel} steps/sec", True, VERT_CLAIR)
+    surface.blit(fps_txt, (20, 115))
+    
+    # Zone du graphique décalée vers le bas
+    margin_x, margin_y = 50, 45
     g_w = LARGEUR_SOUS_JEU - margin_x - 20
-    g_h = HAUTEUR_SOUS_JEU - margin_y - 140
+    g_h = HAUTEUR_SOUS_JEU - margin_y - 180
     
     base_y = HAUTEUR_SOUS_JEU - margin_y
-    top_y = 130
+    top_y = 175
     
+    # Axes
     pygame.draw.line(surface, BLANC, (margin_x, base_y), (LARGEUR_SOUS_JEU - 20, base_y), 1)
     pygame.draw.line(surface, BLANC, (margin_x, base_y), (margin_x, top_y), 1)
     
@@ -193,7 +194,7 @@ def dessiner_graphe(surface, scores, moyennes, slider):
 def main():
     pygame.init()
     fenetre_globale = pygame.display.set_mode((LARGEUR_FENETRE, HAUTEUR_FENETRE))
-    pygame.display.set_caption("🐍 Snake IA — Entraînement RL Multi-Agent (Optimisation Vitesse)")
+    pygame.display.set_caption("🐍 Snake IA — Entraînement Double Curseur (Calcul vs Rendu)")
     horloge = pygame.time.Clock()
     
     surfaces = []
@@ -205,7 +206,11 @@ def main():
     offset_x = 3 * LARGEUR_SOUS_JEU
     offset_y = 1 * HAUTEUR_SOUS_JEU
     
-    slider = Slider(30, 40, 240, 12, 5, 1000, 60)
+    # Deux sliders distincts :
+    # 1. Slider Simulation (nombre d'étapes de calcul par mise à jour d'image) : 1 à 200 ou Max
+    slider_sim = Slider(20, 35, 250, 10, 1, 200, 1, titre="Simulations / Image")
+    # 2. Slider FPS (taux de rafraîchissement d'affichage de l'écran) : 5 à 120 FPS
+    slider_fps = Slider(20, 85, 250, 10, 5, 120, 30, titre="Rafraîchissement Rendu (FPS)")
     
     jeux = [SubSnakeGame(surfaces[i]) for i in range(7)]
     agent = AgentDQN()
@@ -230,12 +235,10 @@ def main():
     steps_depuis_dernier_temps = 0
     fps_reel = 0
     
-    print("\nEntraînement multi-agents optimisé lancé !")
+    print("\nEntraînement multi-agents double vitesse lancé !")
     
     while en_cours:
-        fps_ia = 0 if slider.mode_max else int(slider.valeur)
-
-        # --- Gestion événements ---
+        # --- Gestion des événements globaux ---
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 en_cours = False
@@ -247,55 +250,48 @@ def main():
                 elif event.key == pygame.K_s:
                     agent.sauvegarder()
             
-            slider.handle_event(event, offset_x, offset_y)
-            
-            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                pos = (event.pos[0] - offset_x, event.pos[1] - offset_y)
-                if 30 <= pos[0] <= 110 and 70 <= pos[1] <= 95:
-                    slider.valeur = 50
-                    slider.mode_max = False
-                    slider.update_bouton_pos()
-                elif 140 <= pos[0] <= 240 and 70 <= pos[1] <= 95:
-                    slider.mode_max = True
-                    slider.valeur = slider.max
-                    slider.update_bouton_pos()
+            slider_sim.handle_event(event, offset_x, offset_y)
+            slider_fps.handle_event(event, offset_x, offset_y)
 
         if en_pause:
             pygame.time.wait(100)
             continue
             
-        # --- Boucle physique / calculs ---
-        for i, jeu in enumerate(jeux):
-            action = agent.choisir_action(etats[i], entrainement=True)
-            etat_suivant, recompense, termine, score = jeu.step(action)
-            agent.memoriser(etats[i], action, recompense, etat_suivant, termine)
+        # Déterminer le nombre d'étapes de simulation à exécuter lors de cette frame
+        steps_a_faire = 1
+        if slider_sim.mode_max:
+            # En mode vitesse max, on boucle un grand nombre de fois par frame
+            steps_a_faire = 500
+        else:
+            steps_a_faire = int(slider_sim.valeur)
             
-            # OPTIMISATION 1 : On entraîne le réseau 1 fois toutes les 4 étapes physiques
-            # de façon distribuée pour soulager grandement le CPU sans ralentir la convergence.
-            step_compteur += 1
-            if step_compteur % 4 == 0:
-                agent.entrainer()
-            
-            # OPTIMISATION 2 : Si mode_max, on désactive complètement les appels de rendu 
-            # individuels Pygame des cases de jeu (headless dynamique).
-            if not slider.mode_max:
-                jeu.render(id_jeu=i+1)
+        # Exécuter les étapes de calcul en arrière-plan
+        for _ in range(steps_a_faire):
+            for i, jeu in enumerate(jeux):
+                action = agent.choisir_action(etats[i], entrainement=True)
+                etat_suivant, recompense, termine, score = jeu.step(action)
+                agent.memoriser(etats[i], action, recompense, etat_suivant, termine)
                 
-            etats[i] = etat_suivant
-            steps_depuis_dernier_temps += 1
-            
-            if termine:
-                scores_historique.append(score)
-                liste_scores_recents.append(score)
-                if len(liste_scores_recents) > 100:
-                    liste_scores_recents.pop(0)
-                moyennes_historique.append(sum(liste_scores_recents) / len(liste_scores_recents))
+                # Optimisation : entraînement PyTorch réparti
+                step_compteur += 1
+                if step_compteur % 4 == 0:
+                    agent.entrainer()
+                    
+                etats[i] = etat_suivant
+                steps_depuis_dernier_temps += 1
                 
-                etats[i] = jeu.reset()
-                agent.fin_episode()
-                
-                if len(scores_historique) % 100 == 0:
-                    agent.sauvegarder()
+                if termine:
+                    scores_historique.append(score)
+                    liste_scores_recents.append(score)
+                    if len(liste_scores_recents) > 100:
+                        liste_scores_recents.pop(0)
+                    moyennes_historique.append(sum(liste_scores_recents) / len(liste_scores_recents))
+                    
+                    etats[i] = jeu.reset()
+                    agent.fin_episode()
+                    
+                    if len(scores_historique) % 100 == 0:
+                        agent.sauvegarder()
 
         # Calculer le framerate de calcul réel toutes les secondes
         temps_actuel = time.time()
@@ -304,31 +300,18 @@ def main():
             steps_depuis_dernier_temps = 0
             dernier_temps_fps = temps_actuel
 
-        # Rendu de la 8ème case (graphe et slider)
-        if slider.mode_max:
-            # En mode MAX, on nettoie tout l'écran avec un message de veille pour éviter de forcer sur le GPU/VSync
-            fenetre_globale.fill(NOIR)
+        # Rendu visuel à l'écran (à la vitesse dictée par le slider FPS)
+        for i, jeu in enumerate(jeux):
+            jeu.render(id_jeu=i+1)
             
-            # Rendre uniquement la case #8 et un message informatif au milieu de l'écran
-            police_grand = pygame.font.SysFont('arial', 24)
-            info_txt = police_grand.render(f"Calculs GPU/CPU sans VSync -- Vitesse reelle : {fps_reel} FPS (steps/sec)", True, VERT_CLAIR)
-            txt_help = pygame.font.SysFont('arial', 16).render("Pour ré-afficher les serpents en direct, déplacez le slider vers la gauche ou cliquez sur [50 FPS].", True, BLANC)
-            
-            fenetre_globale.blit(info_txt, (50, HAUTEUR_FENETRE // 2 - 40))
-            fenetre_globale.blit(txt_help, (50, HAUTEUR_FENETRE // 2))
-            
-            # Toujours dessiner le graphe et le slider dans la case 8 pour pouvoir interagir
-            dessiner_graphe(surfaces[7], scores_historique, moyennes_historique, slider)
-        else:
-            # Rendu classique du graphe
-            dessiner_graphe(surfaces[7], scores_historique, moyennes_historique, slider)
+        # Rendu de la 8ème case (graphe + double slider)
+        dessiner_graphe(surfaces[7], scores_historique, moyennes_historique, slider_sim, slider_fps, fps_reel)
         
         # Mettre à jour l'affichage global
         pygame.display.flip()
         
-        # Rythme d'affichage
-        if fps_ia > 0:
-            horloge.tick(fps_ia)
+        # Limiter la mise à jour graphique selon le slider FPS
+        horloge.tick(int(slider_fps.valeur))
             
     agent.sauvegarder()
     pygame.quit()
