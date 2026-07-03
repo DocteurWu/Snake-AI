@@ -24,6 +24,10 @@ Snake-AI/
 └── Rapport_Technique.md   # Explication théorique détaillée
 ```
 
+## 📝 License
+
+Ce projet est sous licence **MIT** (Open Source avec attribution requise). Voir le fichier [LICENSE](LICENSE) pour plus de détails.
+
 ---
 
 ## 🚀 Guide Rapide de Lancement
