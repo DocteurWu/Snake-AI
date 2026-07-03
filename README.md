@@ -21,6 +21,7 @@ Snake-AI/
 ├── play_and_record.py     # Enregistrement direct et automatique des parties humaines
 ├── train_imitation.py     # Apprentissage par imitation (Behavioral Cloning)
 ├── demo_ia.py             # Visualisation graphique du modèle entraîné
+├── generate_benchmark.py  # NOUVEAU : Trace le graphe de benchmark logarithmique des performances
 └── Rapport_Technique.md   # Explication théorique détaillée
 ```
 
@@ -55,9 +56,12 @@ python train_multi_dqn.py
 
 # Mode headless (sur Orange Pi, vitesse max débridée par défaut, ou limitée en steps/s)
 python train_dqn.py --max-steps-s 1000   # Exemple : limite à 1000 calculs par seconde
+
+# Générer le graphe de benchmark logarithmique des performances
+python generate_benchmark.py
 ```
 
-### 4. Étape C : Démo visuelle
+### 4. Étape D : Démo visuelle
 Regardez le serpent final naviguer sur la grille :
 ```bash
 # Visualiser le DQN
