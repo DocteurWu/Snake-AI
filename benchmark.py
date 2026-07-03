@@ -17,46 +17,13 @@ from config import TAILLE_ETAT, NB_ACTIONS
 HISTORIQUE_PATH = "data/benchmark_history.json"
 GRAPH_PATH = "benchmark.png"
 
-def evaluer_modele(agent, nb_parties=100, lock=None):
+def enregistrer_et_generer_benchmark(nb_episodes, score_moyen):
     """
-    Évalue le modèle actuel en mode exploitation pure sur plusieurs parties.
-    Utilise la parallélisation par batch pour aller extrêmement vite.
-    """
-    # 20 jeux en parallèle pour maximiser la vitesse d'inférence
-    NB_ENV_TEST = 20
-    jeux = [SnakeGame(mode_graphique=False) for _ in range(NB_ENV_TEST)]
-    etats = [jeu.reset() for jeu in jeux]
-    
-    scores = []
-    
-    while len(scores) < nb_parties:
-        # Inférence groupée sans exploration (greedy) avec lock si fourni
-        if lock:
-            with lock:
-                actions = agent.choisir_actions_batch(etats, entrainement=False)
-        else:
-            actions = agent.choisir_actions_batch(etats, entrainement=False)
-        
-        for idx in range(NB_ENV_TEST):
-            etat_suivant, _, termine, score = jeux[idx].step(actions[idx])
-            etats[idx] = etat_suivant
-            
-            if termine:
-                scores.append(score)
-                etats[idx] = jeux[idx].reset()
-                if len(scores) >= nb_parties:
-                    break
-                    
-    return sum(scores[:nb_parties]) / nb_parties
-
-def enregistrer_et_generer_benchmark(nb_episodes, agent, lock=None):
-    """
-    Évalue le modèle, enregistre l'historique et génère le graphique log-linéaire.
+    Enregistre le score moyen d'entraînement dans l'historique et génère le graphique log-linéaire.
     """
     try:
-        print(f"\n📊 Évaluation du modèle à {nb_episodes} épisodes d'entraînement...")
-        score_moyen = evaluer_modele(agent, lock=lock)
-        print(f"📈 Score moyen obtenu sur 100 parties de test : {score_moyen:.2f}")
+        print(f"\n📊 Enregistrement du benchmark à {nb_episodes} épisodes...")
+        print(f"📈 Score moyen d'entraînement (100 dernières parties) : {score_moyen:.2f}")
         
         # Charger l'historique existant
         historique = []

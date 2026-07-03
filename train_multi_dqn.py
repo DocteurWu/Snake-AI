@@ -200,7 +200,7 @@ def thread_entrainement_background(agent, slider_bg):
                     with lock_modele:
                         agent.sauvegarder()
                     from benchmark import enregistrer_et_generer_benchmark
-                    enregistrer_et_generer_benchmark(len(scores_train), agent, lock=lock_modele)
+                    enregistrer_et_generer_benchmark(len(scores_train), moyennes_train[-1])
                         
         temps_actuel = time.time()
         if temps_actuel - dernier_temps >= 1.0:

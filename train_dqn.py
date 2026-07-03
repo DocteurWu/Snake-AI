@@ -120,8 +120,9 @@ def main():
                     # Sauvegarde périodique et benchmark
                     if total_episodes % 100 == 0:
                         agent.sauvegarder()
+                        moyenne_actuelle = sum(scores_recents) / len(scores_recents) if scores_recents else 0.0
                         from benchmark import enregistrer_et_generer_benchmark
-                        enregistrer_et_generer_benchmark(total_episodes, agent)
+                        enregistrer_et_generer_benchmark(total_episodes, moyenne_actuelle)
             
             # Limiter la vitesse si demandé
             if args.max_steps_s > 0:
